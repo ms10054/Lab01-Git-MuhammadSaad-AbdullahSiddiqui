@@ -1,123 +1,69 @@
-
-`timescale 1ns/1ps
-
-module tb_fsm_counter;
-
-    reg         clk;
-    reg         rst;
-    reg  [15:0] switch_in;
-    wire [15:0] leds;
-    wire        state_out;
-
-    fsm_counter dut (
-        .clk       (clk),
-        .rst       (rst),
-        .switch_in (switch_in),
-        .leds      (leds),
-        .state_out (state_out)
-    );
-
-
-    initial clk = 0;
-    always #5 clk = ~clk;
-
-    task wait_cycles;
-        input integer n;
-        integer i;
-        begin
-            for (i = 0; i < n; i = i + 1)
-                @(posedge clk);
-        end
-    endtask
-
-    integer cycle;
-
-    initial begin
-        $dumpfile("fsm_counter.vcd");
-        $dumpvars(0, tb_fsm_counter);
-
-
-        $display("\n=== TEST 1: Reset ===");
-        rst       = 1;
-        switch_in = 16'd0;
-        wait_cycles(3);
-        rst = 0;
-        @(posedge clk); #1;
-        if (state_out !== 0)
-            $display("FAIL: Expected S0 after reset, got state=%b", state_out);
-        else
-            $display("PASS: In S0 after reset");
-
-
-        $display("\n=== TEST 2: Stay in S0 (switch=0) ===");
-        switch_in = 16'd0;
-        wait_cycles(5);
-        @(posedge clk); #1;
-        if (state_out !== 0)
-            $display("FAIL: Should remain in S0, got state=%b", state_out);
-        else
-            $display("PASS: Remained in S0");
-
-        $display("\n=== TEST 3: S0 → S1 on switch=5 ===");
-        switch_in = 16'd5;
-        @(posedge clk); #1;   // latch switch, move to S1
-        @(posedge clk); #1;
-        if (state_out !== 1)
-            $display("FAIL: Expected S1, got state=%b", state_out);
-        else
-            $display("PASS: Transitioned to S1, counter loaded with 5");
-        $display("      leds = %0d (expected ~5 or 4 depending on pipeline)", leds);
-
- 
-        $display("\n=== TEST 4: Countdown from 5 → 0, return to S0 ===");
-        // Keep switch_in = 5 but watch it count down
-        // Need to clear switch so we don't reload on re-entry to S0
-        // After countdown the FSM returns to S0; if switch is still 5 it
-        // immediately re-enters S1.  Set switch to 0 after a couple cycles.
-        switch_in = 16'd0;   // prevent re-entry
-        for (cycle = 0; cycle < 10; cycle = cycle + 1) begin
-            @(posedge clk); #1;
-            $display("      cycle=%0d  state=%b  leds=%0d", cycle, state_out, leds);
-        end
-        if (state_out !== 0)
-            $display("FAIL: Should be back in S0 after countdown");
-        else
-            $display("PASS: Returned to S0 after countdown");
-
-   
-        $display("\n=== TEST 5: Mid-count reset ===");
-        switch_in = 16'd15;
-        @(posedge clk); #1;  // enter S1
-        @(posedge clk); #1;
-        @(posedge clk); #1;  // let it count a few
-        $display("      Before reset: state=%b  leds=%0d", state_out, leds);
-        rst = 1;
-        @(posedge clk); #1;
-        rst = 0;
-        @(posedge clk); #1;
-        if (state_out !== 0)
-            $display("FAIL: Expected S0 after mid-count reset");
-        else
-            $display("PASS: Returned to S0 after mid-count reset, leds=%0d", leds);
-
-        $display("\n=== TEST 6: Load value 4, full countdown ===");
-        switch_in = 16'd4;
-        @(posedge clk); #1;
-        switch_in = 16'd0;
-        for (cycle = 0; cycle < 8; cycle = cycle + 1) begin
-            @(posedge clk); #1;
-            $display("      cycle=%0d  state=%b  leds=%0d", cycle, state_out, leds);
-        end
-
-        $display("\n=== All tests complete ===");
-        $finish;
-    end
-
-
-    initial begin
-        #50000;
-        $display("TIMEOUT - simulation did not finish");
-        $finish;
-    end
-
+' timescale 1ns / 1ps
+module tb_top_system();
+// Testbench signals
+reg clk;
+reg rst;
+reg [15:0] tb_sw_pins;
+wire [15:0] tb_led_pins;
+wire [3:0] tb_countdown_out;
+wire [6:0] tb_seg;
+wire [3:0] tb_an;
+// Instantiate the top module (DUT)
+top_system uut (
+.clk (clk),
+.rst (rst),
+.sw_pins (tb_sw_pins),
+.led_pins (tb_led_pins),
+.countdown_display (tb_countdown_out),
+.seg (tb_seg),
+.an (tb_an)
+);
+// Clock generation: 100 MHz (10 ns period)
+always #5 clk = ~clk;
+// Simulation control & stimulus
+initial begin
+// Initialize signals
+clk = 0;
+rst = 1;
+tb_sw_pins = 16'b0000_0000_0000_0000;
+// Dump waveform (very useful for debugging in Vivado simulator)
+$dumpfile("tb_top_system.vcd");
+$dumpvars(0, tb_top_system);
+// Reset phase
+#40; // wait 4 clock cycles
+rst = 0;
+#80; // wait a bit in idle state
+$display("=====================================");
+$display("Test 1: Single switch (SW4 = 1) → start from 4");
+$display("=====================================");
+tb_sw_pins = 16'b0000_0000_0001_0000; // SW4 (bit 4) → should count 4→3→2→1→0
+#200; // give time to see countdown
+$display("=====================================");
+$display("Test 2: Higher switch (SW13 = 1) → start from 13");
+$display("=====================================");
+tb_sw_pins = 16'b0010_0000_0000_0000; // SW13 (bit 13) → 13→12→...→0
+wait(tb_countdown_out == 4'd0); // wait until countdown finishes
+#100;
+$display("=====================================");
+$display("Test 3: Reset during countdown");
+$display("=====================================");
+tb_sw_pins = 16'b0000_1000_0000_0000; // SW11 → start from 11
+#150; // let it count down a bit
+rst = 1;
+#40;
+rst = 0;
+#100;
+$display("=====================================");
+$display("Test 4: All switches off → should stay in Idle");
+$display("=====================================");
+tb_sw_pins = 16'b0000_0000_0000_0000;
+#200;
+$display("Simulation finished successfully.");
+$finish;
+end
+// Monitor important signals (helps a lot when watching console)
+initial begin
+$monitor("Time=%6t | rst=%b | sw=%04h | count=%2d | led=%04h | seg=%b",
+$time, rst, tb_sw_pins, tb_countdown_out, tb_led_pins, tb_seg);
+end
 endmodule

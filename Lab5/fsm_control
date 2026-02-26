@@ -1,0 +1,117 @@
+`timescale 1ns / 1ps
+module fsm_control (
+input wire clk,
+input wire rst,
+input wire [15:0] switch_values,
+output reg [15:0] led_pattern,
+output wire [3:0] count_value,
+output reg [3:0] display_digit // what to show on 7-seg at all times
+);
+// -------------------------------------------------------
+// States:
+// IDLE - no switch on, display blank / zero
+// SHOW - switch is ON, display its number, hold it
+// LOAD - one-cycle latch when switch just turned OFF
+// COUNTDOWN - switch is OFF, counting down to zero
+// -------------------------------------------------------
+localparam IDLE = 2'b00;
+localparam SHOW = 2'b01;
+localparam LOAD = 2'b10;
+localparam COUNTDOWN = 2'b11;
+reg [1:0] current_state, next_state;
+// Snapshot of switch value captured in SHOW, used as load source
+reg [15:0] sw_snapshot;
+// Goes high once count_reg has risen above 0 after a load,
+// so we don't exit COUNTDOWN on the stale 0 before the latch settles
+reg count_started;
+wire countdown_active = (current_state == COUNTDOWN);
+wire load_pulse = (current_state == LOAD);
+wire [3:0] count_reg;
+countdown_timer timer_inst (
+.clk (clk),
+.rst (rst),
+.load (load_pulse),
+.active(countdown_active),
+.sw_in (sw_snapshot), // use snapshot, not live switches
+.count (count_reg)
+);
+assign count_value = count_reg;
+// Priority encode highest ON switch bit
+function [3:0] encode_sw;
+input [15:0] sw;
+begin
+if (sw[15]) encode_sw = 4'd15;
+else if (sw[14]) encode_sw = 4'd14;
+else if (sw[13]) encode_sw = 4'd13;
+else if (sw[12]) encode_sw = 4'd12;
+else if (sw[11]) encode_sw = 4'd11;
+else if (sw[10]) encode_sw = 4'd10;
+else if (sw[9]) encode_sw = 4'd9;
+else if (sw[8]) encode_sw = 4'd8;
+else if (sw[7]) encode_sw = 4'd7;
+else if (sw[6]) encode_sw = 4'd6;
+else if (sw[5]) encode_sw = 4'd5;
+else if (sw[4]) encode_sw = 4'd4;
+else if (sw[3]) encode_sw = 4'd3;
+else if (sw[2]) encode_sw = 4'd2;
+else if (sw[1]) encode_sw = 4'd1;
+else encode_sw = 4'd0;
+end
+endfunction
+// State register + snapshot capture
+always @(posedge clk) begin
+if (rst) begin
+current_state <= IDLE;
+sw_snapshot <= 16'b0;
+count_started <= 1'b0;
+end else begin
+current_state <= next_state;
+if (current_state == SHOW && switch_values != 16'b0)
+sw_snapshot <= switch_values;
+// Clear flag when leaving COUNTDOWN, set it once count_reg is non-zero
+if (next_state != COUNTDOWN)
+count_started <= 1'b0;
+else if (count_reg != 4'd0)
+count_started <= 1'b1;
+end
+end
+// Next-state + output logic
+always @(*) begin
+next_state = current_state;
+led_pattern = 16'b0;
+display_digit = 4'd0;
+case (current_state)
+IDLE: begin
+display_digit = 4'd0;
+led_pattern = 16'b0;
+if (switch_values != 16'b0)
+next_state = SHOW;
+end
+SHOW: begin
+// Switch is ON - show the number derived from switches
+display_digit = encode_sw(switch_values);
+led_pattern = switch_values;
+if (switch_values == 16'b0)
+next_state = LOAD;
+end
+LOAD: begin
+// One cycle latch - keep showing the snapshot number
+display_digit = encode_sw(sw_snapshot);
+led_pattern = 16'b0;
+next_state = COUNTDOWN;
+end
+COUNTDOWN: begin
+// Show the live countdown value from the timer
+display_digit = count_reg;
+led_pattern = 16'b0;
+// Only exit on zero AFTER the timer has been seen non-zero
+// (prevents false exit while count_reg is still 0 post-load)
+if (count_started && count_reg == 4'd0)
+next_state = IDLE;
+if (switch_values != 16'b0)
+next_state = SHOW;
+end
+default: next_state = IDLE;
+endcase
+end
+endmodule

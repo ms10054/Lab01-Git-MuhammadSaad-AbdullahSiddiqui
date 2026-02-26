@@ -1,125 +1,54 @@
-
-`timescale 1ns/1ps
-
-module fsm_counter (
-    input         clk,
-    input         rst,          // synchronous reset
-    input  [15:0] switch_in,    // switch value (debounced)
-    output reg [15:0] leds,     // LED output showing countdown
-    output reg        state_out // 0 = S0, 1 = S1  (for debug/testbench)
+`timescale 1ns / 1ps
+module top_system (
+input wire clk,
+input wire rst,
+input wire [15:0] sw_pins,
+output wire [15:0] led_pins,
+output wire [3:0] countdown_display,
+output wire [6:0] seg,
+output wire [3:0] an
 );
-
-    // State encoding
-    localparam S0 = 1'b0;
-    localparam S1 = 1'b1;
-
-    reg        state, next_state;
-    reg [15:0] counter;
-
-    always @(posedge clk) begin
-        if (rst)
-            state <= S0;
-        else
-            state <= next_state;
-    end
-
-    always @(*) begin
-        case (state)
-            S0: begin
-                if (switch_in != 16'd0)
-                    next_state = S1;
-                else
-                    next_state = S0;
-            end
-            S1: begin
-                if (rst || switch_in == 16'hFFFF || counter == 16'd0)
-                    // 'reset' input or countdown finished → back to S0
-                    next_state = S0;
-                else
-                    next_state = S1;
-            end
-            default: next_state = S0;
-        endcase
-    end
-
-   
-    always @(posedge clk) begin
-        if (rst) begin
-            counter <= 16'd0;
-            leds    <= 16'd0;
-        end else begin
-            case (state)
-                S0: begin
-                    // Pre-load counter when a non-zero switch value is seen
-                    if (switch_in != 16'd0) begin
-                        counter <= switch_in;
-                        leds    <= switch_in;
-                    end else begin
-                        counter <= 16'd0;
-                        leds    <= 16'd0;
-                    end
-                end
-                S1: begin
-                    if (counter > 16'd0) begin
-                        counter <= counter - 16'd1;
-                        leds    <= counter - 16'd1;
-                    end else begin
-                        counter <= 16'd0;
-                        leds    <= 16'd0;
-                    end
-                end
-            endcase
-        end
-    end
-
-    // Debug output
-    always @(*) state_out = state;
-
-endmodule
-
-
-module debouncer (
-    input  clk,
-    input  pbin,
-    output pbout
+wire [31:0] bus_data;
+wire [15:0] fsm_led_value;
+wire [3:0] current_count;
+wire [3:0] display_digit; // state-aware digit for 7-seg
+assign countdown_display = current_count;
+assign an = 4'b1110;
+// Switch reader
+switches switch_reader (
+.clk (clk),
+.rst (rst),
+.btns (16'b0),
+.switches (sw_pins),
+.readEnable (1'b1),
+.readData (bus_data),
+.writeData (32'b0),
+.writeEnable (1'b0),
+.memAddress (30'b0)
 );
-    reg [2:0] shift;
-    always @(posedge clk)
-        shift <= {shift[1:0], pbin};
-    assign pbout = (shift[2] & shift[1]) | (shift[2] & shift[0]) | (shift[1] & shift[0]);
-endmodule
-
-
-module leds (
-    input         clk,
-    input         rst,
-    input  [15:0] btns,
-    input  [31:0] writeData,
-    input         writeEnable,
-    input         readEnable,
-    input  [29:0] memAddress,
-    input  [15:0] switches,
-    output reg [31:0] readData
+// Main FSM + countdown logic
+fsm_control main_fsm (
+.clk (clk),
+.rst (rst),
+.switch_values (bus_data[15:0]),
+.led_pattern (fsm_led_value),
+.count_value (current_count),
+.display_digit (display_digit) // NEW: use this for 7-seg
 );
-    // In this lab the LED output is driven by fsm_counter.
-    // This stub satisfies the interface requirement.
-    always @(posedge clk)
-        readData <= 32'd0;
-endmodule
-
-
-module switches (
-    input         clk,
-    input         rst,
-    input  [31:0] writeData,
-    input         writeEnable,
-    input         readEnable,
-    input  [29:0] memAddress,
-    output reg [31:0] readData,
-    output reg [15:0] leds_out
+// 7-seg now driven by display_digit, not current_count
+seg7_decoder display_decoder (
+.digit (display_digit),
+.seg (seg)
 );
-    always @(posedge clk) begin
-        readData <= 32'd0;
-        leds_out <= 16'd0;
-    end
+// LED driver
+led_driver led_controller (
+.clk (clk),
+.rst (rst),
+.writeData ({16'b0, fsm_led_value}),
+.writeEnable (1'b1),
+.readEnable (1'b0),
+.memAddress (30'b0),
+.readData (),
+.leds (led_pins)
+);
 endmodule
