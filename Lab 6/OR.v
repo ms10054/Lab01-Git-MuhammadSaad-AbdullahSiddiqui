@@ -1,9 +1,10 @@
-'timescale 1ns/ 1ps
+`timescale 1ns / 1ps
 
-module OR(
-    input SW1,
-    input SW2,
-    output LED
+module OR (
+    input  wire [31:0] A,
+    input  wire [31:0] B,
+    output [31:0] Z
 );
-or u1 (SW1, SW2, LED);
+
+assign Z = A | B;
 endmodule

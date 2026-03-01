@@ -1,9 +1,9 @@
-'timescale 1ns/ 1ps
+`timescale 1ns / 1ps
 
 module AND(
-    input SW1,
-    input SW2,
-    output LED
+    input  wire [31:0] A,
+    input  wire [31:0] B,
+    output [31:0] Z
 );
-and u1 (SW1, SW2, LED);
+assign Z = A&B;
 endmodule
