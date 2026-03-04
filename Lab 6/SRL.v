@@ -1,9 +1,13 @@
 `timescale 1ns / 1ps
 
-module SLL(
-    input [31:0] A,
-    output [31:0] Z
+module SRL(
+    input wire A,
+    input wire signal_in,
+    output wire Z,
+    output wire signal_out
     );
     
-assign Z = A << 1;
+    assign signal_out = A;
+    assign Z = signal_in;
+    
 endmodule
