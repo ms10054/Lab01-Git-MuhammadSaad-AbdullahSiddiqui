@@ -5,5 +5,5 @@ module SLL(
     output [31:0] Z
     );
     
-assign Z = A << 1;
+assign Z = A >> 1;
 endmodule
