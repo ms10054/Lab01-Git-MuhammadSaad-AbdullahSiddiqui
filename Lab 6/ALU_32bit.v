@@ -1,24 +1,24 @@
 `timescale 1ns / 1ps
 
 module ALU_32Bit(
-    input wire [31:0] A,
-    input wire [31:0] B,
-    input wire [3:0] Control,
-    output wire signal_out,
-    output wire [31:0] Y,
-    output wire Zero      
+    input  wire [31:0] A,
+    input  wire [31:0] B,
+    input  wire  [3:0] Control,
+    output wire        signal_out,
+    output wire [31:0] Result,
+    output wire        Zero
 );
-    
+
     wire [31:0] carry_propagate;
     wire [31:0] result_wire;
     wire [31:0] shift_output;
-    wire shift_operation;
-    
+    wire        shift_operation;
+
     assign shift_operation = (Control[2:0] == 3'b101);
     assign shift_output    = {A[31], A[31:1]};
     wire initial_carry = Control[0];
-    
-    ALU ALU0  (.a(A[0]),  .b(B[0]),  .control({initial_carry,     Control[2:0]}), .Y(carry_propagate[0]),  .Z(result_wire[0]));
+
+    ALU ALU0  (.a(A[0]),  .b(B[0]),  .control({initial_carry,          Control[2:0]}), .Y(carry_propagate[0]),  .Z(result_wire[0]));
     ALU ALU1  (.a(A[1]),  .b(B[1]),  .control({carry_propagate[0],  Control[2:0]}), .Y(carry_propagate[1]),  .Z(result_wire[1]));
     ALU ALU2  (.a(A[2]),  .b(B[2]),  .control({carry_propagate[1],  Control[2:0]}), .Y(carry_propagate[2]),  .Z(result_wire[2]));
     ALU ALU3  (.a(A[3]),  .b(B[3]),  .control({carry_propagate[2],  Control[2:0]}), .Y(carry_propagate[3]),  .Z(result_wire[3]));
@@ -50,9 +50,9 @@ module ALU_32Bit(
     ALU ALU29 (.a(A[29]), .b(B[29]), .control({carry_propagate[28], Control[2:0]}), .Y(carry_propagate[29]), .Z(result_wire[29]));
     ALU ALU30 (.a(A[30]), .b(B[30]), .control({carry_propagate[29], Control[2:0]}), .Y(carry_propagate[30]), .Z(result_wire[30]));
     ALU ALU31 (.a(A[31]), .b(B[31]), .control({carry_propagate[30], Control[2:0]}), .Y(carry_propagate[31]), .Z(result_wire[31]));
-   
+
     assign Result     = shift_operation ? shift_output : result_wire;
-    assign Y          = shift_operation ? A[0] : carry_propagate[31];
+    assign signal_out = shift_operation ? A[0]         : carry_propagate[31];
     assign Zero       = (Result == 32'b0);
 
 endmodule
