@@ -1,9 +1,10 @@
 `timescale 1ns / 1ps
 
 module AND(
-    input wire A,
-    input wire B,
-    output Z
+    input  wire A,          // First 1-bit operand
+    input  wire B,          // Second 1-bit operand
+    output wire ALUResult   // Output: A AND B
 );
-assign Z = A&B;
+    assign ALUResult = A & B;
+
 endmodule
