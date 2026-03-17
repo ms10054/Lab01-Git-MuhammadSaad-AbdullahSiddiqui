@@ -9,7 +9,7 @@ module DataMemory (
     output reg [31:0] read_data
 );
 
-    reg [31:0] mem [0:511];
+    reg [31:0] mem [511:0];
 
     // Synchronous write
     always @(posedge clk) begin
