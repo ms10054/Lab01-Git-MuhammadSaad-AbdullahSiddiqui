@@ -8,11 +8,10 @@ module DataMemory (
     input  [31:0] WriteData,
     output [31:0] ReadData
 );
-    reg  [31:0] Memory [0:511];
-    integer     n;
 
-    wire [7:0] loc = address[7:0];
+    reg [31:0] mem [0:511];
 
+    // Synchronous write
     always @(posedge clk) begin
         if (reset) begin
             for (n = 0; n < 512; n = n + 1)
