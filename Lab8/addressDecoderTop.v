@@ -8,79 +8,77 @@ module addressDecoderTop (
     input         writeEnable,
     input  [31:0] writeData,
     input  [15:0] switches,
+    input  [15:0] btns,
     output [31:0] readData,
     output [15:0] leds
 );
 
-    // --------------------------------------------------------
-    //  Address Decoder
-    // --------------------------------------------------------
-    wire DataMemWrite, DataMemRead;
-    wire LEDWrite, SwitchReadEnable;
+    //---------------------------------------------------------
+    // Peripheral select signals from address decoder
+    //---------------------------------------------------------
+    wire sel_datamem;
+    wire sel_led;
+    wire sel_sw;
 
-    AddressDecoder decoder (
-        .address         (address[9:8]),
-        .readEnable      (readEnable),
-        .writeEnable     (writeEnable),
-        .DataMemWrite    (DataMemWrite),
-        .DataMemRead     (DataMemRead),
-        .LEDWrite        (LEDWrite),
-        .SwitchReadEnable(SwitchReadEnable)
+    AddressDecoder u_decoder (
+        .address         (address[9:0]),
+        .DataMem         (sel_datamem),
+        .LEDWrite        (sel_led),
+        .SwitchReadEnable(sel_sw)
     );
 
-    // --------------------------------------------------------
-    //  Data Memory
-    // --------------------------------------------------------
-    wire [31:0] mem_readData;
+    //---------------------------------------------------------
+    // Data Memory
+    //---------------------------------------------------------
+    wire [31:0] mem_rd;
 
-    DataMemory data_mem (
-        .clk        (clk),
-        .MemWrite   (DataMemWrite),
-        .MemRead    (DataMemRead),
-        .address    (address[7:0]),
-        .write_data (writeData),
-        .read_data  (mem_readData)
+    DataMemory u_datamem (
+        .clk      (clk),
+        .reset    (rst),
+        .MemWrite (sel_datamem & writeEnable),
+        .address  (address[9:0]),
+        .WriteData(writeData),
+        .ReadData (mem_rd)
     );
+    
+    //---------------------------------------------------------
+    // LED peripheral  (write-only - readData always 0)
+    //---------------------------------------------------------
+    wire [31:0] led_rd;
 
-
-    wire [31:0] led_readData;  // always 0 (LEDs are write-only)
-    wire [15:0] led_out;
-
-    leds leds_inst (
+    leds u_leds (
         .clk        (clk),
         .rst        (rst),
         .writeData  (writeData),
-        .writeEnable(LEDWrite),
+        .writeEnable(sel_led & writeEnable),
         .readEnable (1'b0),
         .memAddress (address[29:0]),
-        .readData   (led_readData),
-        .leds       (led_out)
+        .readData   (led_rd),
+        .leds       (leds)
     );
 
-    // --------------------------------------------------------
-    //  Switch peripheral (from Lab 5)
-    // --------------------------------------------------------
-    wire [31:0] sw_readData;
+    //---------------------------------------------------------
+    // Switch peripheral  (read-only)
+    //---------------------------------------------------------
+    wire [31:0] sw_rd;
 
-    switches switches_inst (
+    switches u_switches (
         .clk        (clk),
         .rst        (rst),
-        .btns       (16'd0),
-        .writeData  (32'd0),
-        .writeEnable(1'b0),
-        .readEnable (SwitchReadEnable),
+        .btns       (btns),
+        .writeData  (writeData),
+        .writeEnable(writeEnable),
+        .readEnable (sel_sw & readEnable),
         .memAddress (address[29:0]),
-        .switches   (switches),
-        .readData   (sw_readData)
+        .sw         (switches),
+        .readData   (sw_rd)
     );
 
-    // --------------------------------------------------------
-    //  Read data mux: one device active at a time
-    // --------------------------------------------------------
-    assign readData = DataMemRead      ? mem_readData :
-                      SwitchReadEnable ? sw_readData  :
-                                         32'd0;
-
-    assign leds = led_out;
+    //---------------------------------------------------------
+    // Read data mux - only one peripheral active at a time
+    //---------------------------------------------------------
+    assign readData = sel_sw      ? sw_rd  :
+                      sel_datamem ? mem_rd :
+                                    32'd0;
 
 endmodule
